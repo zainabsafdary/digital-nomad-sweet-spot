@@ -1,0 +1,175 @@
+---
+title: "Digital Nomads"
+author: "Zainab Safdary"
+date: "2025-05-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("rlang")
+packageVersion("rlang")
+library(tidyverse)
+library(ggrepel)
+```
+
+
+```{r PrepareData}
+nomads <- meridian_nomad_index_2026_09_26
+names(nomads) <- as.character(nomads[5, ])
+nomads <- nomads[-c(1:5), ]
+```
+
+```{r convertData}
+nomads <- nomads %>%
+mutate(across(-c(city, country), as.numeric))
+```
+
+```{r Benchmarks }
+cost_med <- median(
+  nomads$essentials_usd_month,
+  na.rm = TRUE)
+
+safety_med <- median(
+  nomads$safety_index,
+  na.rm = TRUE)
+
+internet_med <- median(
+  nomads$internet_mbps,
+  na.rm = TRUE)
+```
+
+```{r qualifyingCities}
+tradeoff <- nomads %>%
+  mutate(
+     cheap = essentials_usd_month < cost_med,
+     safe = safety_index > safety_med,
+     fast_internet = internet_mbps > internet_med,
+     
+all_three = if_else( cheap & safe & fast_internet,
+      "Meets all three",
+      "Does not meet all three"))
+
+tradeoff %>%
+  count(all_three) %>%
+  mutate(percent = n / sum(n) * 100)
+
+
+tradeoff %>%
+  filter(all_three == "Meets all three") %>%
+  select(
+    city,
+    country,
+    essentials_usd_month,
+    safety_index,
+    internet_mbps
+  ) %>%
+  arrange(essentials_usd_month)
+```
+
+
+```{r Visuals}
+ggplot(
+  tradeoff,
+  aes(
+    x = essentials_usd_month,
+    y = internet_mbps)) +
+
+  annotate(
+    "rect",
+    xmin = -Inf,
+    xmax = cost_med,
+    ymin = internet_med,
+    ymax = Inf,
+    fill = "#f3e6b8",
+    alpha = 0.35) +
+
+  geom_vline(
+    xintercept = cost_med,
+    linetype = "dashed",
+    color = "grey55",
+    linewidth = 0.5) +
+
+  geom_hline(
+    yintercept = internet_med,
+    linetype = "dashed",
+    color = "grey55",
+    linewidth = 0.5) +
+
+  geom_point(
+    data = tradeoff %>%
+      filter(all_three == "Does not meet all three"),
+    color = "#c9c9c9",
+    size = 3.5,
+    alpha = 0.40) +
+
+  geom_point(
+    data = tradeoff %>%
+      filter(all_three == "Meets all three"),
+    color = "#176B87",
+    size = 4.5,
+    alpha = 0.95) +
+
+  geom_text_repel(
+    data = tradeoff %>%
+      filter(
+        city %in% c(
+          "Hoi An",
+          "Da Nang",
+          "Bucharest",
+          "Granada",
+          "Osaka",
+          "Florianópolis" ) ),
+    aes(label = city),
+    size = 3.7,
+    fontface = "bold",
+    box.padding = 0.5,
+    point.padding = 0.4,
+    min.segment.length = 0) +
+
+  annotate(
+    "text",
+    x = 650,
+    y = 285,
+    label = "THE SWEET SPOT",
+    fontface = "bold",
+    color = "#8a6500",
+    size = 4) +
+
+  coord_cartesian(
+    xlim = c(400, 3200),
+    ylim = c(0, 300)) +
+
+  labs(
+    title = "The Digital Nomad Sweet Spot",
+    subtitle = "Mapping cities that are affordable, safe, and have fast internet",
+    x = "Monthly essentials (USD)",
+    y = "Internet speed (Mbps)",
+    caption = "Teal cities beat the median on cost, safety, and internet speed.") +
+
+  theme_minimal(base_size = 13) +
+
+  theme(
+    plot.title = element_text(
+      size = 22,
+      face = "bold",
+      margin = margin(b = 5) ),
+
+    plot.subtitle = element_text(
+      size = 13,
+      color = "grey30",
+      margin = margin(b = 15) ),
+
+    axis.title = element_text(
+      face = "bold"),
+
+    panel.grid.minor = element_blank(),
+
+    panel.grid.major = element_line(
+      color = "#eeeeee",
+      linewidth = 0.4),
+
+    plot.caption = element_text(
+      color = "grey45",
+      size = 9))
+```
